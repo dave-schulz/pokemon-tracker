@@ -7,24 +7,21 @@ WORKDIR /app
 # Copy only dependency files first for caching
 COPY package.json pnpm-lock.yaml* ./
 
-# Enable pnpm and install dependencies (including dev dependencies for build)
+# Enable pnpm and install dependencies (with dev deps for build)
 ENV NODE_ENV=development
 RUN corepack enable && pnpm install --no-frozen-lockfile
 
-# Copy the rest of the project
+# Copy project files
 COPY . .
 
-# Explicitly ensure Prisma schema exists and generate client
+# Ensure Prisma schema is available and generate client
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
-# Show confirmation (optional)
-RUN ls -la src/generated/prisma || echo "⚠️ Prisma output directory not found yet"
-
-# Build TypeScript project
+# Build TypeScript (Prisma Client is now available)
 RUN pnpm build
 
-# Switch to production mode
+# Switch to production
 ENV NODE_ENV=production
 
-# Default start command
+# Start the app
 CMD ["pnpm", "start"]
