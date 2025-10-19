@@ -21,6 +21,6 @@ async function main() {
   saveProducts(newProducts);
 }
 
-/** Runs the scraper continuously every 30 seconds. */
-setInterval(main, 30_000);
+/** Runs the scraper continuously every 2 minutes. */
+setInterval(main, 120_000);
 main();
