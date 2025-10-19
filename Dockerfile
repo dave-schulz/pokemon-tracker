@@ -4,24 +4,27 @@ FROM mcr.microsoft.com/playwright:v1.56.1-jammy
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy package definitions first (for better Docker caching)
+# Copy only dependency files first for caching
 COPY package.json pnpm-lock.yaml* ./
 
-# Enable Corepack (for pnpm) and install all dependencies (with dev deps for build)
+# Enable pnpm and install dependencies (including dev dependencies for build)
 ENV NODE_ENV=development
 RUN corepack enable && pnpm install --no-frozen-lockfile
 
-# Copy the remaining project files
+# Copy the rest of the project
 COPY . .
 
-# Generate the Prisma client BEFORE building
-RUN npx prisma generate
+# Explicitly ensure Prisma schema exists and generate client
+RUN npx prisma generate --schema=./prisma/schema.prisma
 
-# Build TypeScript into the /dist directory
+# Show confirmation (optional)
+RUN ls -la src/generated/prisma || echo "⚠️ Prisma output directory not found yet"
+
+# Build TypeScript project
 RUN pnpm build
 
-# Switch to production mode for runtime
+# Switch to production mode
 ENV NODE_ENV=production
 
-# Default command to start the application
+# Default start command
 CMD ["pnpm", "start"]
