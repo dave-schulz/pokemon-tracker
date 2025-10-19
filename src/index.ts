@@ -1,26 +1,57 @@
 import "dotenv/config";
-import { scrapePokemonProducts } from "./scraper";
 import { loadProducts, saveProducts } from "./storage";
 import { detectChanges } from "./monitor";
 import { notifyNew, notifyPriceDrops, notifyRestocks } from "./notify";
+import { scrapeBol } from "./stores/bol";
+import { scrapeDreamland } from "./stores/dreamland";
 
-/** Main process that scrapes products, detects changes, and sends Discord notifications. */
-async function main() {
-  const oldProducts = loadProducts();
-  const newProducts = await scrapePokemonProducts();
+/** Handles scraping, change detection, and notifications for a single store. */
+async function runStore(storeName: string, scrapeFn: () => Promise<any[]>) {
+  console.log(`🏪 Starting scrape for ${storeName}...`);
 
-  // Compares old and new data to find new listings, price drops, and restocks.
+  const oldProducts = loadProducts(storeName);
+  let newProducts: any[] = [];
+
+  try {
+    newProducts = await scrapeFn();
+  } catch (err) {
+    console.error(`❌ Scrape failed for ${storeName}:`, (err as Error).message);
+  }
+
+  if (!newProducts || newProducts.length === 0) {
+    console.warn(`⚠️ Skipping ${storeName} — no products scraped.`);
+    return;
+  }
+
   const { newProducts: newOnes, priceDrops, restocked } = detectChanges(oldProducts, newProducts);
 
-  // Sends updates to Discord channels for each type of change.
+  if (newOnes.length || priceDrops.length || restocked.length) {
+    console.log(`📢 Changes detected for ${storeName}:`);
+    if (newOnes.length) console.log(`  🆕 ${newOnes.length} new products`);
+    if (priceDrops.length) console.log(`  💸 ${priceDrops.length} price drops`);
+    if (restocked.length) console.log(`  📦 ${restocked.length} restocks`);
+  } else {
+    console.log(`🟢 No changes for ${storeName}.`);
+  }
+
   await notifyNew(newOnes);
   await notifyPriceDrops(priceDrops);
   await notifyRestocks(restocked);
 
-  // Saves the latest product snapshot locally for comparison in the next run.
-  saveProducts(newProducts);
+  saveProducts(storeName, newProducts);
+
+  console.log(`✅ Finished processing ${storeName}.\n`);
 }
 
-/** Runs the scraper continuously every 2 minutes. */
+/** Main process that scrapes products from all supported stores. */
+async function main() {
+  console.log("🕷️ Starting full scrape cycle...");
+
+  await Promise.allSettled([runStore("bol", scrapeBol), runStore("dreamland", scrapeDreamland)]);
+
+  console.log("✅ All stores processed.\n");
+}
+
+/** Run the scraper continuously every 2 minutes. */
 setInterval(main, 120_000);
 main();
