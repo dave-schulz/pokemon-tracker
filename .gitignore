@@ -20,3 +20,10 @@ dist/
 
 # Data
 data/
+src/generated/prisma/
+
+# Prisma & Database (extra toegevoegd)
+node_modules/.prisma/
+prisma/dev.db
+prisma/migrations/dev/
+prisma/migrations/*.db-journal

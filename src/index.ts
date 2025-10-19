@@ -7,20 +7,28 @@ import { scrapeDreamland } from "./stores/dreamland";
 import { Product } from "./types";
 
 /**
- * Handles scraping, change detection, and notifications for a single store.
- * Each store has its own JSON file to prevent cross-store duplication.
+ * 🏪 Runs the full scrape and change detection for a single store.
+ * Uses Prisma-backed storage instead of JSON files.
  */
 async function runStore(storeName: string, scrapeFn: () => Promise<Product[]>) {
   console.log(`🏪 Starting scrape for ${storeName}...`);
 
-  // Load the previous snapshot of products for this store
-  const oldProducts = loadProducts(storeName);
+  let oldProducts: Product[] = [];
   let newProducts: Product[] = [];
 
+  // 🔹 Load existing products from the database
+  try {
+    oldProducts = await loadProducts(storeName);
+  } catch (err) {
+    console.warn(`⚠️ Could not load old products for ${storeName}:`, (err as Error).message);
+  }
+
+  // 🔹 Scrape fresh product data
   try {
     newProducts = await scrapeFn();
   } catch (err) {
     console.error(`❌ Scrape failed for ${storeName}:`, (err as Error).message);
+    return; // Stop if scraping failed
   }
 
   if (!newProducts || newProducts.length === 0) {
@@ -28,10 +36,10 @@ async function runStore(storeName: string, scrapeFn: () => Promise<Product[]>) {
     return;
   }
 
-  // Detect changes between the previous and current product lists
+  // 🔹 Compare current vs previous data
   const { newProducts: newOnes, priceDrops, restocked } = detectChanges(oldProducts, newProducts);
 
-  // Log detected changes
+  // 🔹 Log changes clearly
   if (newOnes.length || priceDrops.length || restocked.length) {
     console.log(`📢 Changes detected for ${storeName}:`);
     if (newOnes.length) console.log(`  🆕 ${newOnes.length} new products`);
@@ -41,29 +49,44 @@ async function runStore(storeName: string, scrapeFn: () => Promise<Product[]>) {
     console.log(`🟢 No changes for ${storeName}.`);
   }
 
-  // Send Discord notifications per change type
-  await notifyNew(newOnes);
-  await notifyPriceDrops(priceDrops);
-  await notifyRestocks(restocked);
+  // 🔹 Send Discord notifications for each change type
+  try {
+    if (newOnes.length) await notifyNew(newOnes);
+    if (priceDrops.length) await notifyPriceDrops(priceDrops);
+    if (restocked.length) await notifyRestocks(restocked);
+  } catch (err) {
+    console.error(
+      `❌ Failed to send Discord notifications for ${storeName}:`,
+      (err as Error).message,
+    );
+  }
 
-  // Save the latest snapshot for this store
-  saveProducts(storeName, newProducts);
-
-  console.log(`✅ Finished processing ${storeName}.\n`);
+  // 🔹 Save updated products to the database
+  try {
+    await saveProducts(storeName, newProducts);
+    console.log(`✅ Finished processing ${storeName}.\n`);
+  } catch (err) {
+    console.error(`❌ Failed to save products for ${storeName}:`, (err as Error).message);
+  }
 }
 
 /**
- * Main process that scrapes all supported stores in parallel.
- * Each store runs independently to prevent blocking the others.
+ * 🕷️ Runs all scrapers in parallel (Bol.com, Dreamland, etc.)
+ * Each store runs independently to prevent blocking.
  */
 async function main() {
   console.log("🕷️ Starting full scrape cycle...");
 
-  await Promise.allSettled([runStore("bol", scrapeBol), runStore("dreamland", scrapeDreamland)]);
+  await Promise.allSettled([
+    runStore("Bol.com", scrapeBol),
+    runStore("Dreamland", scrapeDreamland),
+  ]);
 
   console.log("✅ All stores processed.\n");
 }
 
-/** Runs the scraper continuously every 2 minutes. */
+/**
+ * ⏱️ Run scraper continuously every 2 minutes (120s).
+ */
 setInterval(main, 120_000);
 main();
