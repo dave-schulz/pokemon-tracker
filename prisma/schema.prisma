@@ -15,6 +15,7 @@ model Product {
   price     String
   oldPrice  String?
   inStock   Boolean? @default(true)
+  priority  Boolean  @default(false)
   lastSeen  DateTime @default(now())
   createdAt DateTime @default(now())
 }
