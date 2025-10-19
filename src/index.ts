@@ -1,26 +1,26 @@
+import "dotenv/config";
 import { scrapePokemonProducts } from "./scraper";
 import { loadProducts, saveProducts } from "./storage";
+import { detectChanges } from "./monitor";
+import { notifyNew, notifyPriceDrops, notifyRestocks } from "./notify";
 
+/** Main process that scrapes products, detects changes, and sends Discord notifications. */
 async function main() {
-  console.log("Scraper is gestart!");
-
   const oldProducts = loadProducts();
-  console.log(`Oude producten geladen: ${oldProducts.length}`);
-
   const newProducts = await scrapePokemonProducts();
-  console.log(`Nieuwe producten geladen: ${newProducts.length}`);
 
-  const oldLinks = new Set(oldProducts.map((p) => p.link));
-  const freshProducts = newProducts.filter((p) => !oldLinks.has(p.link));
+  // Compares old and new data to find new listings, price drops, and restocks.
+  const { newProducts: newOnes, priceDrops, restocked } = detectChanges(oldProducts, newProducts);
 
-  if (freshProducts.length > 0) {
-    console.log(`✨ ${freshProducts.length} nieuwe producten gevonden!\n`);
-    freshProducts.forEach((p) => console.log(`• ${p.title}\n  💰 ${p.price}\n  🔗 ${p.link}\n`));
-  } else {
-    console.log("📭 Geen nieuwe producten sinds de laatste run.");
-  }
+  // Sends updates to Discord channels for each type of change.
+  await notifyNew(newOnes);
+  await notifyPriceDrops(priceDrops);
+  await notifyRestocks(restocked);
 
+  // Saves the latest product snapshot locally for comparison in the next run.
   saveProducts(newProducts);
 }
 
+/** Runs the scraper continuously every 30 seconds. */
+setInterval(main, 30_000);
 main();
