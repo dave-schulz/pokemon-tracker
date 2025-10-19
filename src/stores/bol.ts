@@ -2,14 +2,17 @@ import { Product } from "../types";
 import { getBrowser } from "../utils/browser";
 import { safePageLoad } from "../utils/safePageLoad";
 import { filterPokemonProducts } from "../utils/filterProducts";
+import { checkProductDetailStock } from "../utils/checkStock";
 
 /**
- * Scrapes all Pokémon card products from Bol.com using safe page loading and shared browser instance.
+ * Scrapes all Pokémon card products from Bol.com using safe page loading,
+ * shared browser instance, and detail-level stock verification where needed.
  */
 export async function scrapeBol(): Promise<Product[]> {
   const startUrl = "https://www.bol.com/nl/nl/s/?searchtext=pokemon+kaarten";
   const browser = await getBrowser();
   const page = await browser.newPage();
+  const detailPage = await browser.newPage();
   const allProducts: Product[] = [];
 
   try {
@@ -18,6 +21,7 @@ export async function scrapeBol(): Promise<Product[]> {
     const ok = await safePageLoad(page, startUrl, 1);
     if (!ok) throw new Error("Failed to load the first page of Bol.com");
 
+    // Detect total number of pages
     const totalPages = await page.evaluate(() => {
       const pagination = document.querySelector('[data-testid="pagination"]');
       if (!pagination) return 1;
@@ -85,17 +89,31 @@ export async function scrapeBol(): Promise<Product[]> {
         return items;
       });
 
-      console.log(`✅ ${productsOnPage.length} products found on page ${currentPage}`);
+      // 🔍 Verify stock on detail page if unclear or uncertain
+      for (const p of productsOnPage) {
+        if (!p.inStock || p.price === "Prijs onbekend") {
+          const verified = await checkProductDetailStock(detailPage, p.link);
+          if (verified !== p.inStock) {
+            console.log(`🔁 Stock corrected for ${p.title}: ${p.inStock} → ${verified}`);
+            p.inStock = verified;
+          }
+          // Small delay to avoid detection
+          await new Promise((r) => setTimeout(r, 400 + Math.random() * 400));
+        }
+      }
+
+      console.log(`✅ ${productsOnPage.length} products processed on page ${currentPage}`);
       allProducts.push(...productsOnPage);
     }
 
     const filtered = filterPokemonProducts(allProducts);
-    console.log(`🎯 Found ${filtered.length} valid Pokémon products on Bol.com.`);
+    console.log(`🎯 Found ${filtered.length} verified Pokémon products on Bol.com.`);
     return filtered;
   } catch (error) {
     console.error("❌ Fatal error scraping Bol.com:", error);
     return [];
   } finally {
     await page.close();
+    await detailPage.close();
   }
 }

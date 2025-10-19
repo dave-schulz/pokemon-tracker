@@ -2,15 +2,18 @@ import { Product } from "../types";
 import { getBrowser } from "../utils/browser";
 import { safePageLoad } from "../utils/safePageLoad";
 import { filterPokemonProducts } from "../utils/filterProducts";
+import { checkProductDetailStock } from "../utils/checkStock";
 
 /**
- * Scrapes all Pokémon card products from Dreamland using shared browser and safe page loading.
+ * Scrapes all Pokémon card products from Dreamland using shared browser, safe page loading,
+ * and detail-level stock verification for uncertain items.
  */
 export async function scrapeDreamland(keyword: string = "pokemon ruilkaarten"): Promise<Product[]> {
   const baseUrl = "https://www.dreamland.nl/zoeken/producten?q=";
   const query = encodeURIComponent(keyword);
   const browser = await getBrowser();
   const page = await browser.newPage();
+  const detailPage = await browser.newPage();
   const allProducts: Product[] = [];
 
   console.log(`🕷️ Dreamland scraper started for search "${keyword}"...`);
@@ -29,6 +32,7 @@ export async function scrapeDreamland(keyword: string = "pokemon ruilkaarten"): 
         break;
       }
 
+      // Extract all visible product info
       const pageProducts = await page.evaluate(() => {
         const items: {
           title: string;
@@ -53,9 +57,22 @@ export async function scrapeDreamland(keyword: string = "pokemon ruilkaarten"): 
         return items;
       });
 
-      console.log(`✅ Found ${pageProducts.length} products on Dreamland page ${pageNum}`);
+      // 🔍 Verify stock on detail page if uncertain or price unknown
+      for (const p of pageProducts) {
+        if (!p.inStock || p.price === "Onbekend") {
+          const verified = await checkProductDetailStock(detailPage, p.link);
+          if (verified !== p.inStock) {
+            console.log(`🔁 Stock corrected for ${p.title}: ${p.inStock} → ${verified}`);
+            p.inStock = verified;
+          }
+          await new Promise((r) => setTimeout(r, 400 + Math.random() * 400));
+        }
+      }
+
+      console.log(`✅ Processed ${pageProducts.length} products on Dreamland page ${pageNum}`);
       allProducts.push(...pageProducts.map((p) => ({ ...p, store: "Dreamland" })));
 
+      // Check if there’s a next page
       const nextExists = await page.$("a.pagination__next");
       if (!nextExists) {
         console.log("🚪 No next page — reached end of Dreamland results.");
@@ -73,5 +90,6 @@ export async function scrapeDreamland(keyword: string = "pokemon ruilkaarten"): 
     return [];
   } finally {
     await page.close();
+    await detailPage.close();
   }
 }

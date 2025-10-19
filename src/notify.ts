@@ -17,18 +17,15 @@ async function sendDiscordMessage(webhookUrl: string, embeds: any[], plainTextFa
 
   try {
     if (embeds.length > 0) {
-      // Discord allows a maximum of 10 embeds per message
       const batches = [];
       for (let i = 0; i < embeds.length; i += 10) {
         batches.push(embeds.slice(i, i + 10));
       }
-
       for (const batch of batches) {
         await axios.post(webhookUrl, { embeds: batch });
-        await new Promise((r) => setTimeout(r, 700)); // small delay to avoid rate limits
+        await new Promise((r) => setTimeout(r, 700));
       }
     } else if (plainTextFallback) {
-      // Split plain text into chunks of 1900 chars (Discord limit)
       const chunks = plainTextFallback.match(/[\s\S]{1,1900}/g) || [];
       for (const chunk of chunks) {
         await axios.post(webhookUrl, { content: chunk });
@@ -44,16 +41,27 @@ async function sendDiscordMessage(webhookUrl: string, embeds: any[], plainTextFa
 }
 
 /**
- * Creates a clean, themed Discord embed for a product.
+ * Creates a styled Discord embed for product notifications.
  */
-function makeEmbed(p: Product, color: number, titlePrefix: string, description?: string) {
+function makeEmbed(
+  p: Product,
+  color: number,
+  titlePrefix: string,
+  context: "new" | "price" | "restock",
+) {
   const storeName = p.store || "Onbekende winkel";
 
-  // If product has old price → show comparison
-  const priceField =
-    p.oldPrice && p.price && p.oldPrice !== p.price
-      ? `~~${p.oldPrice}~~ ➜ **${p.price}**`
-      : `**${p.price || "Onbekend"}**`;
+  // 💰 Build dynamic description with proper Markdown
+  let description = "";
+  if (context === "price" && p.oldPrice && p.oldPrice !== p.price) {
+    description = `~~${p.oldPrice}~~ ➜ **${p.price}**\n📉 De prijs is verlaagd — profiteer snel!`;
+  } else if (context === "new") {
+    description = `💰 **${p.price}**\n✨ Nieuw Pokémon-product in de shop!`;
+  } else if (context === "restock") {
+    description = `💰 **${p.price}**\n📦 Dit product is weer op voorraad!`;
+  } else {
+    description = `💰 **${p.price || "Onbekend"}**`;
+  }
 
   return {
     title: `${titlePrefix} ${p.title}`,
@@ -62,7 +70,6 @@ function makeEmbed(p: Product, color: number, titlePrefix: string, description?:
     description,
     fields: [
       { name: "🛒 Winkel", value: storeName, inline: true },
-      { name: "💰 Prijs", value: priceField, inline: true },
       { name: "🔗 Productlink", value: `[Bekijk hier](${p.link})`, inline: false },
     ],
     footer: { text: "Pokémon Tracker • Automatisch bijgewerkt" },
@@ -71,66 +78,28 @@ function makeEmbed(p: Product, color: number, titlePrefix: string, description?:
 }
 
 /**
- * 🔔 Meldt nieuwe producten.
+ * 🔔 Nieuwe producten.
  */
 export async function notifyNew(products: Product[]) {
   if (!products.length) return;
-
-  const embeds = products.map((p) =>
-    makeEmbed(p, 0x2ecc71, "🆕 Nieuw product:", "Een nieuw Pokémon-product is toegevoegd!"),
-  );
-
-  const fallback = products
-    .map(
-      (p) =>
-        `🆕 **${p.title}** (${p.store || "onbekend"})\n💰 **${p.price}**\n🔗 ${p.link}\n✨ Nieuw in de shop!`,
-    )
-    .join("\n\n");
-
-  await sendDiscordMessage(WEBHOOK_NEW, embeds, fallback);
+  const embeds = products.map((p) => makeEmbed(p, 0x2ecc71, "🆕 Nieuw product:", "new"));
+  await sendDiscordMessage(WEBHOOK_NEW, embeds);
 }
 
 /**
- * 💸 Meldt prijsdalingen met oude prijs doorgestreept.
+ * 💸 Prijsdalingen (met oude prijs doorgestreept).
  */
 export async function notifyPriceDrops(products: Product[]) {
   if (!products.length) return;
-
-  const embeds = products.map((p) =>
-    makeEmbed(
-      p,
-      0xe74c3c,
-      "💸 Prijsdaling:",
-      "De prijs van dit product is verlaagd! Grijp je kans 👇",
-    ),
-  );
-
-  const fallback = products
-    .map(
-      (p) =>
-        `💸 **${p.title}** (${p.store || "onbekend"})\n💰 ~~${p.oldPrice || "?"}~~ ➜ **${p.price}**\n🔗 ${p.link}`,
-    )
-    .join("\n\n");
-
-  await sendDiscordMessage(WEBHOOK_PRICE, embeds, fallback);
+  const embeds = products.map((p) => makeEmbed(p, 0xe74c3c, "💸 Prijsdaling:", "price"));
+  await sendDiscordMessage(WEBHOOK_PRICE, embeds);
 }
 
 /**
- * 📦 Meldt producten die weer op voorraad zijn.
+ * 📦 Weer op voorraad.
  */
 export async function notifyRestocks(products: Product[]) {
   if (!products.length) return;
-
-  const embeds = products.map((p) =>
-    makeEmbed(p, 0xf1c40f, "📦 Weer op voorraad:", "Dit product is opnieuw beschikbaar!"),
-  );
-
-  const fallback = products
-    .map(
-      (p) =>
-        `📦 **${p.title}** is weer op voorraad! (${p.store || "onbekend"})\n💰 **${p.price}**\n🔗 ${p.link}`,
-    )
-    .join("\n\n");
-
-  await sendDiscordMessage(WEBHOOK_RESTOCK, embeds, fallback);
+  const embeds = products.map((p) => makeEmbed(p, 0xf1c40f, "📦 Weer op voorraad:", "restock"));
+  await sendDiscordMessage(WEBHOOK_RESTOCK, embeds);
 }
