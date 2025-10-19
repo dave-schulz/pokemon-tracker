@@ -1,17 +1,23 @@
 {
   "name": "pokemon-tracker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Scraper die Pokémon producten van Bol.com monitort.",
+  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && pnpm exec playwright install --with-deps",
     "start": "node dist/index.js",
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
     "lint": "eslint 'src/**/*.{ts,js}'",
     "lint:fix": "eslint 'src/**/*.{ts,js}' --fix",
-    "format": "prettier --write 'src/**/*.{ts,js,json,md}'"
+    "format": "prettier --write 'src/**/*.{ts,js,json,md}'",
+    "scrape": "tsx src/index.ts"
   },
-  "keywords": [],
+  "keywords": [
+    "scraper",
+    "pokemon",
+    "bol.com",
+    "playwright"
+  ],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.18.3",
@@ -26,6 +32,7 @@
     "playwright": "^1.56.1",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.1",
     "typescript": "^5.9.3"
   }
 }
