@@ -1,0 +1,19 @@
+# Node.js
+node_modules/
+dist/
+.env
+*.log
+
+# TypeScript
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+
+# pnpm store (veiligheidshalve)
+.pnpm-debug.log
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
