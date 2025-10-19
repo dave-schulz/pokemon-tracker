@@ -1,27 +1,26 @@
 # Use the official Playwright image with all required dependencies and browsers preinstalled
 FROM mcr.microsoft.com/playwright:v1.56.1-jammy
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy only dependency files first for caching
+# Copy package definitions first for better caching
 COPY package.json pnpm-lock.yaml* ./
 
-# Enable pnpm and install dependencies (with dev deps for build)
+# Copy prisma schema early so postinstall can find it
+COPY prisma ./prisma
+
+# Enable Corepack (for pnpm) and install all dependencies (with dev deps)
 ENV NODE_ENV=development
 RUN corepack enable && pnpm install --no-frozen-lockfile
 
-# Copy project files
+# Copy the rest of your project files
 COPY . .
 
-# Ensure Prisma schema is available and generate client
-RUN npx prisma generate --schema=./prisma/schema.prisma
-
-# Build TypeScript (Prisma Client is now available)
+# Build TypeScript project (Prisma Client already generated)
 RUN pnpm build
 
-# Switch to production
+# Switch to production mode
 ENV NODE_ENV=production
 
-# Start the app
+# Default start command
 CMD ["pnpm", "start"]
