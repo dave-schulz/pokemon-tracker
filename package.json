@@ -4,13 +4,10 @@
   "description": "Scraper die Pokémon producten van Bol.com monitort.",
   "main": "dist/index.js",
   "scripts": {
-    "setup": "./scripts/setup.sh",
     "build": "tsc",
-    "postbuild": "pnpm exec playwright install --with-deps",
     "start": "node dist/index.js",
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
     "lint": "eslint 'src/**/*.{ts,js}'",
-    "lint:fix": "eslint 'src/**/*.{ts,js}' --fix",
     "format": "prettier --write 'src/**/*.{ts,js,json,md}'",
     "scrape": "tsx src/index.ts"
   },
