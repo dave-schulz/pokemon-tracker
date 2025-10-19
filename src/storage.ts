@@ -1,6 +1,8 @@
 // src/storage.ts
-import { db } from "./db";
+import { PrismaClient } from "@prisma/client";
 import type { Product } from "./types";
+
+export const db = new PrismaClient();
 
 /**
  * 🧠 Load all products for a specific store from the database.
@@ -8,40 +10,41 @@ import type { Product } from "./types";
 export async function loadProducts(store: string): Promise<Product[]> {
   const products = await db.product.findMany({
     where: { store },
-    orderBy: { id: "asc" },
   });
 
-  // Prisma returns nullables; ensure consistent non-null Product type
-  return products.map((p: Product) => ({
+  return products.map((p) => ({
+    id: p.id,
+    store: p.store,
     title: p.title,
+    link: p.link,
     price: p.price ?? "Onbekend",
     oldPrice: p.oldPrice ?? undefined,
-    link: p.link,
-    inStock: p.inStock ?? true,
-    store: p.store,
+    inStock: p.inStock ?? false,
+    lastSeen: p.lastSeen,
+    createdAt: p.createdAt,
   }));
 }
 
 /**
- * 💾 Save (insert or update) products for a given store.
+ * 💾 Save (insert or update) current products for a store.
  */
 export async function saveProducts(store: string, data: Product[]): Promise<void> {
   for (const p of data) {
     await db.product.upsert({
       where: { link: p.link },
-      update: {
-        price: p.price,
-        oldPrice: p.oldPrice ?? undefined,
-        inStock: p.inStock ?? true,
-        lastSeen: new Date(),
-      },
       create: {
         store,
         title: p.title,
         link: p.link,
-        price: p.price,
-        oldPrice: p.oldPrice ?? undefined,
+        price: p.price ?? "Onbekend",
+        oldPrice: p.oldPrice ?? null,
         inStock: p.inStock ?? true,
+      },
+      update: {
+        price: p.price ?? "Onbekend",
+        oldPrice: p.oldPrice ?? null,
+        inStock: p.inStock ?? true,
+        lastSeen: new Date(),
       },
     });
   }
