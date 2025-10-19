@@ -1,45 +1,41 @@
 import fs from "fs";
 import path from "path";
+import { Product } from "./types";
 
-/** Represents a product stored locally between scraper runs. */
-export interface StoredProduct {
-  title: string;
-  price: string;
-  link: string;
-  inStock?: boolean;
-  store: string;
+/**
+ * Ensures that the /data folder exists, and returns the JSON file path for the given store.
+ */
+function getFilePath(store: string): string {
+  const dataDir = path.join(process.cwd(), "data");
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  return path.join(dataDir, `products-${store}.json`);
 }
-
-/** Directory where product snapshots are stored. */
-const DATA_DIR = "data";
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
 /**
  * Loads previously saved products for a specific store.
- * Returns an empty array if no file exists or if the file is invalid.
  */
-export function loadProducts(store: string): StoredProduct[] {
-  const filePath = path.join(DATA_DIR, `${store}.json`);
-  if (!fs.existsSync(filePath)) return [];
+export function loadProducts(store: string): Product[] {
+  const file = getFilePath(store);
+  if (!fs.existsSync(file)) return [];
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    return JSON.parse(fs.readFileSync(file, "utf-8"));
   } catch (err) {
-    console.error(`⚠️ Failed to read ${filePath}:`, (err as Error).message);
+    console.error(`❌ Error reading data for ${store}:`, (err as Error).message);
     return [];
   }
 }
 
 /**
- * Saves the current product snapshot for a specific store.
- * Skips saving if the data is empty to prevent overwriting valid snapshots.
+ * Saves all current products for a specific store.
  */
-export function saveProducts(store: string, data: StoredProduct[]): void {
-  if (!data || data.length === 0) {
-    console.warn(`⚠️ Skipping save for ${store} — no products scraped.`);
-    return;
+export function saveProducts(store: string, data: Product[]): void {
+  const file = getFilePath(store);
+  try {
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error(`❌ Error saving data for ${store}:`, (err as Error).message);
   }
-
-  const filePath = path.join(DATA_DIR, `${store}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  console.log(`💾 Saved ${data.length} products to ${filePath}`);
 }

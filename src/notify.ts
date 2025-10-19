@@ -1,12 +1,15 @@
+// src/notify.ts
 import axios from "axios";
-import type { StoredProduct } from "./storage";
+import { Product } from "./types";
 
-// Webhook URLs from the .env file
+// Webhook URLs loaded from the .env file
 const WEBHOOK_NEW = process.env.WEBHOOK_NEW!;
 const WEBHOOK_PRICE = process.env.WEBHOOK_PRICE!;
 const WEBHOOK_RESTOCK = process.env.WEBHOOK_RESTOCK!;
 
-/** Helper function to send message(s) to a Discord webhook. */
+/**
+ * Helper function to send messages to a Discord webhook.
+ */
 async function sendDiscordMessage(webhookUrl: string, embeds: any[], plainTextFallback?: string) {
   if (!webhookUrl) {
     console.error("❌ No valid Discord webhook URL provided!");
@@ -33,14 +36,20 @@ async function sendDiscordMessage(webhookUrl: string, embeds: any[], plainTextFa
         await new Promise((r) => setTimeout(r, 700));
       }
     }
-  } catch (err) {
-    console.error("❌ Error sending message to Discord:", (err as Error).message);
+  } catch (err: any) {
+    console.error(`❌ Error sending message to Discord: ${err.message || err}`);
+    if (err.response?.status) {
+      console.error(`Discord responded with status ${err.response.status}:`, err.response.data);
+    }
   }
 }
 
-/** Builds a clean Discord embed for a product, including store name. */
-function makeEmbed(p: StoredProduct, color: number, titlePrefix: string) {
+/**
+ * Builds a clean Discord embed for a product, including store name.
+ */
+function makeEmbed(p: Product, color: number, titlePrefix: string) {
   const storeName = p.store || "Onbekende winkel";
+
   return {
     title: `${titlePrefix} ${p.title}`,
     url: p.link,
@@ -54,37 +63,48 @@ function makeEmbed(p: StoredProduct, color: number, titlePrefix: string) {
   };
 }
 
-/** Sends Discord notification for new products. */
-export async function notifyNew(products: StoredProduct[]) {
+/**
+ * Sends Discord notification for new products.
+ */
+export async function notifyNew(products: Product[]) {
   if (!products.length) return;
 
-  const embeds = products.map((p) => makeEmbed(p, 0x2ecc71, "🆕"));
+  const embeds = products.map((p) => makeEmbed(p, 0x2ecc71, "🆕 Nieuw:"));
   const fallback = products
-    .map((p) => `🆕 **${p.title}** (${p.store})\n💰 ${p.price}\n🔗 ${p.link}`)
+    .map((p) => `🆕 **${p.title}** (${p.store || "onbekend"})\n💰 ${p.price}\n🔗 ${p.link}`)
     .join("\n\n");
 
   await sendDiscordMessage(WEBHOOK_NEW, embeds, fallback);
 }
 
-/** Sends Discord notification for price drops. */
-export async function notifyPriceDrops(products: StoredProduct[]) {
+/**
+ * Sends Discord notification for price drops.
+ */
+export async function notifyPriceDrops(products: Product[]) {
   if (!products.length) return;
 
-  const embeds = products.map((p) => makeEmbed(p, 0xe74c3c, "💸"));
+  const embeds = products.map((p) => makeEmbed(p, 0xe74c3c, "💸 Prijsdaling:"));
   const fallback = products
-    .map((p) => `💸 **${p.title}** (${p.store})\nNieuwe prijs: ${p.price}\n🔗 ${p.link}`)
+    .map(
+      (p) => `💸 **${p.title}** (${p.store || "onbekend"})\nNieuwe prijs: ${p.price}\n🔗 ${p.link}`,
+    )
     .join("\n\n");
 
   await sendDiscordMessage(WEBHOOK_PRICE, embeds, fallback);
 }
 
-/** Sends Discord notification when products are back in stock. */
-export async function notifyRestocks(products: StoredProduct[]) {
+/**
+ * Sends Discord notification when products are back in stock.
+ */
+export async function notifyRestocks(products: Product[]) {
   if (!products.length) return;
 
-  const embeds = products.map((p) => makeEmbed(p, 0xf1c40f, "📦"));
+  const embeds = products.map((p) => makeEmbed(p, 0xf1c40f, "📦 Op voorraad:"));
   const fallback = products
-    .map((p) => `📦 **${p.title}** is weer op voorraad! (${p.store})\n💰 ${p.price}\n🔗 ${p.link}`)
+    .map(
+      (p) =>
+        `📦 **${p.title}** is weer op voorraad! (${p.store || "onbekend"})\n💰 ${p.price}\n🔗 ${p.link}`,
+    )
     .join("\n\n");
 
   await sendDiscordMessage(WEBHOOK_RESTOCK, embeds, fallback);

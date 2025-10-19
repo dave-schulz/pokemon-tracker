@@ -1,28 +1,23 @@
-import { chromium } from "playwright";
-
-export interface Product {
-  title: string;
-  price: string;
-  link: string;
-}
+import { Product } from "../types";
+import { getBrowser } from "../utils/browser";
+import { safePageLoad } from "../utils/safePageLoad";
+import { filterPokemonProducts } from "../utils/filterProducts";
 
 /**
- * Scrapes all Pokémon card products from bol.com, including pagination and price parsing.
+ * Scrapes all Pokémon card products from Bol.com using safe page loading and shared browser instance.
  */
 export async function scrapeBol(): Promise<Product[]> {
   const startUrl = "https://www.bol.com/nl/nl/s/?searchtext=pokemon+kaarten";
-  const browser = await chromium.launch({ headless: true });
+  const browser = await getBrowser();
   const page = await browser.newPage();
   const allProducts: Product[] = [];
 
   try {
     console.log("🕷️ Bol.com scraper started...");
 
-    await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.click('button:has-text("Alles accepteren")').catch(() => {});
-    await page.waitForTimeout(1500);
+    const ok = await safePageLoad(page, startUrl, 1);
+    if (!ok) throw new Error("Failed to load the first page of Bol.com");
 
-    // Detect total number of pages
     const totalPages = await page.evaluate(() => {
       const pagination = document.querySelector('[data-testid="pagination"]');
       if (!pagination) return 1;
@@ -32,14 +27,12 @@ export async function scrapeBol(): Promise<Product[]> {
       return pages.length ? Math.max(...pages) : 1;
     });
 
-    console.log(`📑 Found ${totalPages} pages on Bol.com`);
+    console.log(`📑 Found ${totalPages} pages on Bol.com.`);
 
-    // Loop through all pages
     for (let currentPage = 1; currentPage <= totalPages; currentPage++) {
       const url = `${startUrl}&page=${currentPage}`;
-      console.log(`📄 Page ${currentPage}/${totalPages}: ${url}`);
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-      await page.waitForTimeout(1500);
+      const ok = await safePageLoad(page, url, currentPage);
+      if (!ok) continue;
 
       const productsOnPage: Product[] = await page.evaluate(() => {
         const items: Product[] = [];
@@ -53,14 +46,14 @@ export async function scrapeBol(): Promise<Product[]> {
           // --- Price detection ---
           let price = "Prijs onbekend";
 
-          // 1️⃣ Invisible text
+          // 1️⃣ Invisible reader text
           const hiddenSpan = container.querySelector('span[style*="position:absolute"]');
           if (hiddenSpan?.textContent?.includes("euro")) {
             const match = hiddenSpan.textContent.match(/'(\d+)' euro en '(\d+)' cent/);
             if (match) price = `€ ${match[1]},${match[2]}`;
           }
 
-          // 2️⃣ Visible euro + cent fallback
+          // 2️⃣ Visible fallback
           if (price === "Prijs onbekend") {
             const visible = container.querySelector(".font-produkt");
             if (visible) {
@@ -71,17 +64,21 @@ export async function scrapeBol(): Promise<Product[]> {
             }
           }
 
-          // 3️⃣ Last fallback (regex)
+          // 3️⃣ Regex fallback
           if (price === "Prijs onbekend") {
             const text = container.textContent || "";
             const match = text.match(/(\d{1,3})[,.](\d{2})/);
             if (match) price = `€ ${match[1]},${match[2]}`;
           }
 
+          const inStock = !container.textContent?.toLowerCase().includes("uitverkocht");
+
           items.push({
             title,
             price,
             link: "https://www.bol.com" + linkEl.pathname,
+            inStock,
+            store: "Bol.com",
           });
         });
 
@@ -92,26 +89,13 @@ export async function scrapeBol(): Promise<Product[]> {
       allProducts.push(...productsOnPage);
     }
 
-    // Filter only real Pokémon cards (exclude sleeves, binders, etc.)
-    const filtered = allProducts.filter((product) => {
-      const titleLower = product.title.toLowerCase();
-      const hasPokemon = titleLower.includes("pokemon") || titleLower.includes("pokémon");
-      const isAccessory =
-        titleLower.includes("verzamelmap") ||
-        titleLower.includes("binder") ||
-        titleLower.includes("map voor") ||
-        titleLower.includes("sleeves") ||
-        titleLower.includes("toploader") ||
-        titleLower.includes("hoesjes");
-      return hasPokemon && !isAccessory;
-    });
-
-    console.log(`🎯 Found ${filtered.length} real Pokémon card products on Bol.com.`);
+    const filtered = filterPokemonProducts(allProducts);
+    console.log(`🎯 Found ${filtered.length} valid Pokémon products on Bol.com.`);
     return filtered;
   } catch (error) {
-    console.error("❌ Error scraping Bol.com:", error);
+    console.error("❌ Fatal error scraping Bol.com:", error);
     return [];
   } finally {
-    await browser.close();
+    await page.close();
   }
 }

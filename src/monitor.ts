@@ -1,24 +1,22 @@
 // src/monitor.ts
-import type { StoredProduct } from "./storage";
+
+import { Product } from "./types";
 
 /** Represents the detected changes between old and new product lists. */
 export interface ProductChanges {
-  newProducts: StoredProduct[];
-  priceDrops: StoredProduct[];
-  restocked: StoredProduct[];
+  newProducts: Product[];
+  priceDrops: Product[];
+  restocked: Product[];
 }
 
 /** Compares old and new product data to detect new listings, price drops, and restocks. */
-export function detectChanges(
-  oldProducts: StoredProduct[],
-  newProducts: StoredProduct[],
-): ProductChanges {
+export function detectChanges(oldProducts: Product[], newProducts: Product[]): ProductChanges {
   const oldMap = new Map(oldProducts.map((p) => [p.link, p]));
   const newMap = new Map(newProducts.map((p) => [p.link, p]));
 
-  const newOnes: StoredProduct[] = [];
-  const priceDrops: StoredProduct[] = [];
-  const restocked: StoredProduct[] = [];
+  const newOnes: Product[] = [];
+  const priceDrops: Product[] = [];
+  const restocked: Product[] = [];
 
   // Iterates through all new products and compares them with previously saved data.
   for (const product of newProducts) {

@@ -1,11 +1,5 @@
 import { chromium } from "playwright";
-
-/** Represents a single Pokémon product scraped from bol.com. */
-export interface Product {
-  title: string;
-  price: string;
-  link: string;
-}
+import { Product } from "./types";
 
 /**
  * Scrapes all Pokémon card listings from bol.com, including pagination and price detection logic.

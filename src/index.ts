@@ -4,13 +4,18 @@ import { detectChanges } from "./monitor";
 import { notifyNew, notifyPriceDrops, notifyRestocks } from "./notify";
 import { scrapeBol } from "./stores/bol";
 import { scrapeDreamland } from "./stores/dreamland";
+import { Product } from "./types";
 
-/** Handles scraping, change detection, and notifications for a single store. */
-async function runStore(storeName: string, scrapeFn: () => Promise<any[]>) {
+/**
+ * Handles scraping, change detection, and notifications for a single store.
+ * Each store has its own JSON file to prevent cross-store duplication.
+ */
+async function runStore(storeName: string, scrapeFn: () => Promise<Product[]>) {
   console.log(`🏪 Starting scrape for ${storeName}...`);
 
+  // Load the previous snapshot of products for this store
   const oldProducts = loadProducts(storeName);
-  let newProducts: any[] = [];
+  let newProducts: Product[] = [];
 
   try {
     newProducts = await scrapeFn();
@@ -23,8 +28,10 @@ async function runStore(storeName: string, scrapeFn: () => Promise<any[]>) {
     return;
   }
 
+  // Detect changes between the previous and current product lists
   const { newProducts: newOnes, priceDrops, restocked } = detectChanges(oldProducts, newProducts);
 
+  // Log detected changes
   if (newOnes.length || priceDrops.length || restocked.length) {
     console.log(`📢 Changes detected for ${storeName}:`);
     if (newOnes.length) console.log(`  🆕 ${newOnes.length} new products`);
@@ -34,16 +41,21 @@ async function runStore(storeName: string, scrapeFn: () => Promise<any[]>) {
     console.log(`🟢 No changes for ${storeName}.`);
   }
 
+  // Send Discord notifications per change type
   await notifyNew(newOnes);
   await notifyPriceDrops(priceDrops);
   await notifyRestocks(restocked);
 
+  // Save the latest snapshot for this store
   saveProducts(storeName, newProducts);
 
   console.log(`✅ Finished processing ${storeName}.\n`);
 }
 
-/** Main process that scrapes products from all supported stores. */
+/**
+ * Main process that scrapes all supported stores in parallel.
+ * Each store runs independently to prevent blocking the others.
+ */
 async function main() {
   console.log("🕷️ Starting full scrape cycle...");
 
@@ -52,6 +64,6 @@ async function main() {
   console.log("✅ All stores processed.\n");
 }
 
-/** Run the scraper continuously every 2 minutes. */
+/** Runs the scraper continuously every 2 minutes. */
 setInterval(main, 120_000);
 main();
