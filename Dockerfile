@@ -7,13 +7,15 @@ WORKDIR /app
 # Copy package definitions first (for better Docker caching)
 COPY package.json pnpm-lock.yaml* ./
 
-# Enable Corepack (for pnpm) and install all dependencies, including devDependencies
-# Setting NODE_ENV=development ensures TypeScript and other dev tools are available
+# Enable Corepack (for pnpm) and install all dependencies (with dev deps for build)
 ENV NODE_ENV=development
 RUN corepack enable && pnpm install --no-frozen-lockfile
 
 # Copy the remaining project files
 COPY . .
+
+# Generate the Prisma client BEFORE building
+RUN npx prisma generate
 
 # Build TypeScript into the /dist directory
 RUN pnpm build
